@@ -1,0 +1,553 @@
+/* Qubla base function library
+ *
+ * www.absimp.org/qubla
+ *
+ * Copyright (c) 2022 Gergely Gálfi
+ *
+ */
+
+bit0 = bit(0);
+bit1 = bit(1);
+
+function typeerror(funcname, found){
+    error("function '" + funcname + "' doesn't accetps type "+str(found));
+}
+
+function seq(start, stop){
+    local iart = int(start), iop = int(stop);
+    local ret, val;
+    
+    if(__lt__(iart, iop)){
+        ret = alloc(__sub__(iop, iart));
+        val = iart;
+        while(__lt__(val, iop)){
+            ret[__sub__(val, iart)] = val;
+            val = __add__(val, 1);
+        }
+    }
+    else if(__lt__(iop, iart)){
+        ret = alloc(__sub__(iart, iop));
+        val = iart;
+        while(__lt__(iop, val)){
+            ret[__sub__(iart, val)] = val;
+            val = __sub__(val, 1);
+        }
+    }
+    else return [];
+    
+    return ret;
+}
+
+function seq(stop){
+    return seq(0, stop);
+}
+
+function not1bit table {
+    [0] : [1],
+    [1] : [0]
+}
+
+function and2bit table {
+    [0, 0] : [0],
+    [1, 0] : [0],
+    [0, 1] : [0],
+    [1, 1] : [1]
+}
+
+function or2bit table {
+    [0, 0] : [0],
+    [1, 0] : [1],
+    [0, 1] : [1],
+    [1, 1] : [1]
+}
+
+function equal3bit table {
+    [0, 0, 0] : [0],
+    [1, 0, 0] : [0],
+    [0, 1, 0] : [0],
+    [1, 1, 0] : [0],
+    [0, 0, 1] : [1],
+    [1, 0, 1] : [0],
+    [0, 1, 1] : [0],
+    [1, 1, 1] : [1]
+}
+
+function nequal3bit table {
+    [0, 0, 0] : [0],
+    [1, 0, 0] : [1],
+    [0, 1, 0] : [1],
+    [1, 1, 0] : [0],
+    [0, 0, 1] : [1],
+    [1, 0, 1] : [1],
+    [0, 1, 1] : [1],
+    [1, 1, 1] : [1]
+}
+
+function add3bit table {
+    [0, 0, 0] : [0, 0],
+    [1, 0, 0] : [1, 0],
+    [0, 1, 0] : [1, 0],
+    [1, 1, 0] : [0, 1],
+    [0, 0, 1] : [1, 0],
+    [1, 0, 1] : [0, 1],
+    [0, 1, 1] : [0, 1],
+    [1, 1, 1] : [1, 1]
+}
+
+function sub3bit table {
+    [0, 0, 0] : [0, 0],
+    [1, 0, 0] : [1, 0],
+    [0, 1, 0] : [1, 1],
+    [1, 1, 0] : [0, 0],
+    [0, 0, 1] : [1, 1],
+    [1, 0, 1] : [0, 0],
+    [0, 1, 1] : [0, 1],
+    [1, 1, 1] : [1, 1]
+}
+
+function ifelse3bit table {
+    [0, 0, 0] : [0],
+    [1, 0, 0] : [0],
+    [0, 1, 0] : [0],
+    [1, 1, 0] : [1],
+    [0, 0, 1] : [1],
+    [1, 0, 1] : [0],
+    [0, 1, 1] : [1],
+    [1, 1, 1] : [1]
+}
+
+function __equal__(x, y, iseq){
+    local typex = type(x), typey = type(y);
+    local eqtbl, isneq, ident;
+    if(iseq){
+        eqtbl = equal3bit[3];
+        isneq = bit0;
+        ident = `===`[2];
+    }
+    else{
+        eqtbl = nequal3bit[3];
+        isneq = bit1;
+        ident = `!==`[2];
+    }
+
+    if(__logor__(typex === int, typey === int)){
+        if(typex === typey)
+           return ident(x, y);
+        else if(typey === int){
+            local tmp = x;
+            x = y;
+            y = tmp;
+            tmp = typex;
+            typex = typey;
+            typey = tmp;
+        }
+        if(typey === bit)
+            if(iseq)
+                return x === int(y);
+            else
+                return x !== int(y);
+        else if(typey === qbit){
+            if(iseq){
+                if(x === 1)
+                    return y;
+                else if(x === 0)
+                    return not1bit(y);
+            }
+            else{
+                if(x === 0)
+                    return y;
+                else if(x === 1)
+                    return not1bit(y);
+            }
+        }
+        else if(isword(y)){
+            local n = len(y);
+            local nm1 = __sub__(n, 1);
+            if(issigned(y)){
+                local remi = x >> nm1;
+                if(__logand__(remi !== 0, remi !== -1))
+                    return isneq;
+            }
+            else{
+                local remi = x >> n;
+                if(remi !== 0)
+                    return isneq;
+            }
+            local ret = iseq;
+            for(i : seq(nm1, -1)){
+                ret = eqtbl(x[i], y[i], ret)[0];
+                if(ret === isneq) isneq;
+            }
+            return ret;
+        }
+        return isneq;
+    }
+    local iwx = isword(x), iwy = isword(y);
+    if(__logor__(iwx, iwy)){
+        local n;
+        if(__logand__(iwx, iwy)){
+            local nx = len(x);
+            local ny = len(y);
+            if(__lt__(nx, ny)){
+                x = type(x){ny}(x);
+                n = ny;
+            }
+            else if(__lt__(ny, nx)){
+                y = type(y){nx}(y);
+                n = nx;
+            }
+            else
+                n = nx;
+        }
+        else{
+            if(iwy){
+                local tmp = x;
+                x = y;
+                y = tmp;
+                tmp = typex;
+                typex = typey; 
+                typey = tmp;
+            }
+            n = len(x);
+            if(__logor__(typey === bit, typey === qbit)){
+                y = uword{n}(y);
+            }
+            else
+                return isneq;
+        }
+        local ret;
+        local nm1 = __sub__(n, 1);
+        if(__logxor__(issigned(x), issigned(y)))
+            ret = eqtbl(x[nm1], 0, 1)[0];
+        else
+            ret = iseq;
+        for(i : seq(nm1, -1)){
+            if(ret === isneq) return isneq;
+            ret = eqtbl(x[i], y[i], ret)[0];
+        }
+        return ret;
+        
+    }
+    else if(__logand__(
+        __logor__(typex === bit, typex === qbit), 
+        __logor__(typey === bit, typey === qbit)))
+        return eqtbl(x, y, iseq)[0];
+    else
+        return ident(x, y);
+}
+
+function `==`(x, y){
+    return  __equal__(x, y, bit1);
+}
+
+function `!=`(x, y){
+    return  __equal__(x, y, bit0);
+}
+
+function `<`(x, y){
+    return __lt__(x, y);
+}
+
+function `<=`(x, y){
+    return not1bit(__lt__(y, x))[0];
+}
+
+function `>`(x, y){
+    return __lt__(y, x);
+}
+
+function `>=`(x, y){
+    return not1bit(__lt__(x, y))[0];
+}
+
+function incomperr(opname, typex, typex){
+    error("incompatible types for " + opname + ": " + str(typex) + ", "+str(typey));
+}
+
+function `!`(x){
+    return __equal__(x, bit0, bit0);
+}
+
+function `&&`(x, y){
+    return and2bit(0 != x, 0 != y);
+}
+
+function `||`(x, y){
+    return or2bit(0 != x, 0 != y);
+}
+
+function inconsbranch(typet, typef){
+    error("inconsistent branches in ifelse: " + str(typet)+" and " + str(typef));
+}
+
+function ifelse(cond, iftrue, iffalse){
+    local obj1 = iftrue, obj2 = iffalse;
+    local typec = type(cond), typ1 = type(obj1), typ2 = type(obj2);
+    if(typec === bit){
+        if(cond)
+            return obj1;
+        else
+            return obj2;
+    }
+    else if(typec === qbit){
+        local iw1 = isword(obj1), iw2 = isword(obj2);
+        if(__logor__(iw1, iw2)){
+            local n, swap = bit0;
+            if(__logand__(iw1, iw2)){
+                if(issigned(obj1) !== issigned(obj2))
+                    inconsbranch(typ1, typ2);
+                local n1 = len(obj1);
+                local n2 = len(obj2);
+                if(__lt__(n1, n2)){
+                    n = n2;
+                    obj1 = typ1{n}(obj1);
+                }
+                else{
+                    n = n1;
+                    obj2 = typ2{n}(obj2);
+                }
+            }
+            else{
+                if(iw2){
+                    local tmp = obj1;
+                    obj1 = obj2;
+                    obj2 = tmp;
+                    tmp = typ1;
+                    typ1 = typ2;
+                    typ2 = tmp;
+                    swap = bit1;
+                }
+                n = len(obj1);
+                obj2 = typ1{n}(obj2);                    
+            }
+            local ret=alloc(n);
+            if(swap){
+                for(i : seq(n))
+                    ret[i] = ifelse3bit(cond, obj2[i], obj1[i])[0];
+            }
+            else{
+                for(i : seq(n))
+                    ret[i] = ifelse3bit(cond, obj1[i], obj2[i])[0];
+            }
+            return typ1(ret);
+        }
+        else if(__logand__(
+            __logor__(typ1 == bit, typ1 == qbit),
+            __logor__(typ2 == bit, typ2 == qbit))){
+            return ifelse3bit(cond, obj1, obj2)[0];
+        }
+        else error("ifelse accepts cyclic integers (word, bit or qbit) as conditional values when the condition is a qbit");
+    }
+    else error("function ifelse requires either bit or qbit as condition");
+}
+
+function `+`(x){
+    return x;
+}
+
+function __addsub__(x, y, isadd){
+    local optbl, clop, opname;
+    if(isadd){
+        optbl = add3bit[3];
+        clop = __add__[2];
+        opname = "addition";
+    }
+    else{
+        optbl = sub3bit[3];
+        clop = __sub__[2];
+        opname = "substraction";
+    }
+    local typex = type(x), typey = type(y);
+    if(__logor__(typex == cplx, typey == cplx))
+        return clop(cplx(x), cplx(y));
+    local iwx = isword(x), iwy = isword(y);
+    if(__logor__(iwx, iwy)){
+        local n, signed, swap;
+        if(__logand__(iwx, iwy)){
+            local nx = len(x);
+            local ny = len(y);
+            if(__lt__(nx, ny)){
+                x = type(x){ny}(x);
+                n = ny;
+            }
+            else if(__lt__(ny, nx)){
+                y = type(y){nx}(y);
+                n = nx;
+            }
+            else
+                n = nx;
+            signed = __logor__(issigned(x), issigned(y));
+            swap = bit0;
+        }
+        else{
+            if(iwy){
+                local tmp = x;
+                x = y;
+                y = tmp;
+                tmp = typex;
+                typex = typey;
+                typey = tmp;
+                swap = bit1;
+            }
+            else
+                swap = bit0;
+            n = len(x);
+            if(typey == int){
+                y = typex{n}(__sub__(y, (y>>n)<<n));
+                signed = issigned(x);
+            }
+            else if(__logor__(typey === bit, typey === qbit)){
+                y = uword{n}(y);
+                signed = issigned(x);
+            }
+            else{
+                if(swap)
+                    incomperr(opname, typey, typex);
+                else
+                    incomperr(opname, typex, typey);
+            }
+        }
+        local ret=alloc(n), carry = bit0, addres;
+        for(i : seq(n)){
+            if(swap)
+                addres = optbl(y[i], x[i], carry);
+            else
+                addres = optbl(x[i], y[i], carry);
+            ret[i] = addres[0];
+            carry = addres[1];
+        }
+        if(signed)
+            return word{n}(ret);
+        else
+            return uword{n}(ret);
+        
+    }
+    local iix = (typex === int), iiy = (typey === int);
+    if(__logor__(iix, iiy)){
+        local swap;
+        if(__logand__(iix, iiy))
+            return clop(x, y);
+        else if(iiy){
+            local tmp = x;
+            x = y;
+            y = tmp;
+            tmp = typex;
+            typex = typey;
+            typey = tmp;
+            swap = bit1;
+        }
+        else
+            swap = bit0;
+        if (typey == bit){
+            if(swap)
+                return clop(int(y), x);
+            else
+                return clop(x, int(y));
+        }        
+        else{
+            if(swap)
+                incomperr(opname, typey, typex);
+            else
+                incomperr(opname, typex, typey);
+        }
+        
+    }
+    else if(__logand__(
+        __logor__(typex === bit, typex === qbit), 
+        __logor__(typey === bit, typey === qbit)))
+        return optbl(x, y, 0)[0];
+    else if(__logand__(isadd, __logand__(typex == str, typey == str)))
+        return clop(x, y);
+    else
+        incomperr(opname, typex, typey);
+}
+
+function `+`(x, y){
+    return __addsub__(x, y, bit1);
+}
+
+function `-`(x, y){
+    return __addsub__(x, y, bit0);
+}
+
+function `*`(x, y){
+    local typex = type(x), typey = type(y);
+    if(__logor__(typex == cplx, typey == cplx))
+        return __mul__(cplx(x), cplx(y));
+    local iwx = isword(x), iwy = isword(y);
+    if(__logor__(iwx, iwy)){
+        local n, rettyp;
+        if(__logand__(iwx, iwy)){
+            local nx = len(x);
+            local ny = len(y);
+            n = __add__(nx, ny);
+            if(__logor__(issigned(x), issigned(y)))
+                rettyp = word;
+            else
+                rettyp = uword;
+        }
+        else{
+            if(iwy){
+                local tmp = x;
+                x = y;
+                y = tmp;
+                tmp = typex;
+                typex = typey;
+                typey = tmp;
+            }
+            rettyp = typex;
+            n = len(x);
+            
+        }
+        x = rettyp{n}(x);
+        y = rettyp{n}(y);
+        local wzero = rettyp{n}(0), ret = wzero;
+        for(i : seq(len(x))){
+            ret = ret + ifelse(x[i], y<<i, wzero);
+        }
+        return ret;
+    }
+    local iix = (typex === int), iiy = (typey === int);
+    if(__logor__(iix, iiy)){
+        if(__logand__(iix, iiy))
+            return __mul__(x, y);
+        else if(iiy){
+            local tmp = x;
+            x = y;
+            y = tmp;
+            tmp = typex;
+            typex = typey;
+            typey = tmp;
+        }
+        if (typey == bit)
+            return __mul__(x, int(y));
+        incomperr(""*"", typex, typey);
+    }
+    else if(__logand__(
+        __logor__(typex === bit, typex === qbit), 
+        __logor__(typey === bit, typey === qbit)))
+        return and2bit(x, y)[0];
+    else
+        incomperr("*", typex, typey);
+}
+
+
+function intdiv(x, y){
+    return __intdiv__(x, y);
+}
+
+function `//`(x, y){
+    return intdiv(x, y)[0];
+}
+
+function `%`(x, y){
+    return intdiv(x, y)[1];
+}
+
+function `/`(x, y){
+    return __truediv__(x, y);
+}
+
+function `-`(x){
+    return __neg__(x);
+}
