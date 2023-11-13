@@ -1,0 +1,99 @@
+/* Qubla modular arithmetic library
+ *
+ * www.absimp.org/qubla
+ *
+ * Copyright (c) 2022-2023 Gergely Gálfi
+ *
+ */
+
+function modcorr(x, N){
+    starthedge();
+    local ret = ifelse(x < N, x, x - N);
+    endhedge();
+    return ret;
+}
+
+function modaddsub(dosub, x, y, N){
+    local n, xtmp, ytmp, ret, incbits;
+    if(dosub)
+        ytmp = N - y;
+    else
+        ytmp = y;
+        
+    incbits = !((type(x) === int) && (type(y) === int));
+    if(incbits){
+        n = len(x);
+        xtmp = uword{n+1}(x);
+        ytmp = uword{n+1}(ytmp);
+    }
+    else
+        xtmp = x;
+    
+    starthedge();
+    ret = modcorr(xtmp + ytmp, N);
+    endhedge();
+    if(incbits)
+        ret = uword{n}(ret[seq(n)]);
+  
+    return ret;
+}
+
+function modadd(x, y, N){
+    return modaddsub(0, x, y, N);
+}
+
+function modsub(x, y, N){
+    starthedge();
+    local ret = modaddsub(1, x, y, N);
+    endhedge();
+    return ret;
+}
+
+function modmul(x, y, N){
+    local n = len(x);
+    local ret = 0;
+    local wzero = uword{n+1}(0), ret = wzero;
+    local ytmp = uword{n+1}(y);
+    starthedge();
+    for(i : seq(len(x))){
+        starthedge();
+        if(i > 0)
+            ytmp = modcorr(ytmp<<1, N);
+        ret = modcorr(ret + ifelse(x[i], ytmp, wzero), N);
+        endhedge();
+    }
+    starthedge();
+    ret = ifelse(x >= N, ret + N, ret);
+    endhedge();
+    endhedge();
+    return uword{n}(ret[seq(n)]);
+}
+
+function modexp(x, y, N){
+    local m,
+          x2 = x, 
+          ret = 1;
+    if(type(y) === int){
+        if(y === 0)
+            m = 0;
+        else{
+            m = 1;
+            while((y>>m) !== 0)
+                m = m + 1;
+        }
+    }
+    else
+        m = len(y);
+    for(i : seq(m)){
+        if(i > 0)
+            x2 = modmul(x2, x2, N);
+        starthedge();
+        ret = ifelse(y[i], modmul(x2, ret, N), ret);
+        endhedge();
+    }
+    return ret;
+}
+
+function modinv(x, N){
+    return modexp(x, N - 2, N);
+}

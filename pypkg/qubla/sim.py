@@ -2,7 +2,7 @@
 #
 # www.absimp.org/qubla
 #
-# Copyright (c) 2022 Gergely Gálfi
+# Copyright (c) 2022-2023 Gergely Gálfi
 #
 
 from .parser import int2word
@@ -16,11 +16,8 @@ def statevec(qm):
             if initst.typeid == 'INIT':
                 arrinitqb = initst.arrqb.copy()
                 arrstate = [initst.state[k].evaluate() for k in range(initst.nbase)]
-            elif initst.typeid == 'COPY':
-                arrinitqb = [initst.dstidx]
-                arrstate = [1.0+0j, 0j]
             elif initst.typeid == 'APPTBL':
-                arrinitqb = initst.arrqb[initst.nin:]
+                arrinitqb = [qb for qb in initst.arrqbout if not qb in initst.arrqbin]
                 arrstate = [1.0+0j if k == 0 else 0j for k in range(1<<len(arrinitqb))]
             else:
                 arrinitqb = []
@@ -31,7 +28,7 @@ def statevec(qm):
                     arrinitqb[k] = qb
                     inited[qb] = True
                 arrinitstep.append((arrinitqb, arrstate))
-            
+       
     nbas = 1<<qm.nqb
     state = []
     for i in range(nbas):
@@ -40,13 +37,13 @@ def statevec(qm):
         for arrinitqb, arrstate in arrinitstep:
             key = 0
             for k in range(len(arrinitqb)):
-                key += (bits[arrinitqb[k]])<<k
+                key |= (bits[arrinitqb[k]])<<k
             comp = comp*arrstate[key]
         state.append(comp)
 
     arrprepst = []
     for step in qm.arrstep:
-        if step != None and step.typeid != 'INIT':
+        if step != None and step.typeid in ['APPTBL', 'APPOP']:
             stqb = [qm.arrqb[qbidx].compridx for qbidx in step.arrqb]
             mask = 0
             for qb in stqb:
@@ -56,17 +53,27 @@ def statevec(qm):
             rstqb = range(1<<nstqb)
             invtbl = [None for i in rstqb]
             if step.typeid == 'APPTBL':
+                arrinidx = [step.arrqb.index(qb) for qb in step.arrqbin]
+                arroutidx = [step.arrqb.index(qb) for qb in step.arrqbout]
                 for i in range(1<<step.nin):
-                    invtbl[step.tbl[i]] = i
+                    inidx = 0
+                    outidx = 0
+                    for k in range(step.nin):
+                        inbit = ((i >> arrinidx[k]) & 1)
+                        inidx |= inbit << k
+                        if step.arrcopy[k]:
+                            outidx |= inbit << arrinidx[k]
+                    outval = step.tbl[i]
+                    for k in range(step.nout):
+                        outidx |= ((outval >> k) & 1) << arroutidx[k]
+                    invtbl[outidx] = inidx
             elif step.typeid == 'APPOP':
                 invtbl = [[step.opmatr[i][k].evaluate() for k in rstqb] for i in rstqb]
-            else:
-                invtbl[0] = 0
-                invtbl[3] = 1
+            
             arrprepst.append((step.typeid, stqb, mask, invtbl))
-        
             
     for sttype, stqb, mask, invtbl in arrprepst:
+        #print('invtbl',invtbl)
         newstate = []
         nstqb = len(stqb)
         rstqb = range(nstqb)
@@ -76,10 +83,11 @@ def statevec(qm):
                 outb |= ((i>>stqb[k])&1)<<k
             if sttype == 'APPOP':
                 newcomp = 0.0j
-                for inb in rstqb:
+                for inb in range(1<<nstqb):
                     stidx = mask & i
                     for k in rstqb:                        
                         stidx |= ((inb>>k)&1)<<stqb[k]
+                    #print('i:', i, ' inb:', inb, ' outb:', outb, ' stidx:', stidx, ' invtbl:',invtbl)
                     newcomp += invtbl[outb][inb]*state[stidx]
                 newstate.append(newcomp)
             else:
@@ -92,6 +100,7 @@ def statevec(qm):
                         stidx |= ((inb>>k)&1)<<stqb[k]
                     newstate.append(state[stidx])
         state = newstate
+        #print('State:', state)
     return state
 
 def getDens(state, arrqb):

@@ -2,30 +2,33 @@
 #
 # www.absimp.org/qubla
 #
-# Copyright (c) 2022 Gergely Gálfi
+# Copyright (c) 2022-2023 Gergely Gálfi
 #
 
+from .error import *
+
 class SourcePosition:
-    def __init__(self, idx, linenum, linepos, srcfile = None):
+    def __init__(self, idx, linenum, linepos, srcfile = None, lexer = None):
         self.srcfile = srcfile
         self.idx=idx
         self.linenum=linenum
         self.linepos=linepos
+        self.lexer = lexer
         
     def copy(self):
-        return SourcePosition(self.idx, self.linenum, self.linepos, srcfile = self.srcfile)
+        return SourcePosition(self.idx, self.linenum, self.linepos, srcfile = self.srcfile, lexer = self.lexer)
     
     def __str__(self):
         return  '%sline:%d offset:%d' % (
             'filename: %s ' % self.srcfile if self.srcfile != None else '',
             self.linenum,
             self.linepos)
-
-class QBLSyntaxError(Exception):
-    def __init__(self, pos, msg):
-        super().__init__('Syntax error at ' + str(pos) + ': ' + msg)
-        self.pos = pos
     
+    def showSrc(self):
+        ret = self.lexer.getLine(self.linenum) + '\n'
+        ret += (' ' * (self.linepos-1)) + '^\n'
+        return ret
+        
 class Token:
     def __init__(self, type, value, startpos, endpos = None, alnumname = False):
         self.type = type
@@ -61,13 +64,14 @@ class Lexer:
             self.src=source
 
         self.len=len(self.src)
-        self.nextpos=SourcePosition(-1, 0, 0, srcfile = srcfile)
+        self.nextpos=SourcePosition(-1, 0, 0, srcfile = srcfile, lexer = self)
         
         self.state=0
         self.str=''
         self.holdchar=False
         self.newline=True
         self.laarr=[None]
+        self.linearr = []
 
     def prepNextToken(self):                
         while True:
@@ -76,6 +80,7 @@ class Lexer:
                 if self.nextpos.idx<self.len:
                     self.nextc=self.src[self.nextpos.idx]
                     if self.newline:
+                        self.linearr.append(self.nextpos.idx)
                         self.nextpos.linenum+=1
                         self.nextpos.linepos=1
                     else:
@@ -190,7 +195,7 @@ class Lexer:
                 if self.nextc == '*':                    
                     self.state = 12
                 elif self.nextc == '':
-                    raise QBLSyntaxError(self.startpos, "Untermintated comment")
+                    raise QBLSyntaxError(self.startpos, "Unterminated comment")
                     
             elif self.state == 11:
                 if self.nextc in ['\n', '']:
@@ -200,7 +205,7 @@ class Lexer:
                 if self.nextc == '/':
                     self.state = 0
                 elif self.nextc == '':
-                    raise QBLSyntaxError(self.startpos, "Untermintated comment")
+                    raise QBLSyntaxError(self.startpos, "Unterminated comment")
                 else:
                     self.state = 10
 
@@ -217,3 +222,12 @@ class Lexer:
         ret=self.lookAheadToken(0)
         if ret!=None: del self.laarr[0]
         return ret
+    
+    def getLine(self, linenum):
+        start = self.linearr[linenum - 1]
+        end = start
+        n = len(self.src)
+        while end < n and self.src[end] != '\n':
+            end += 1
+        return self.src[start:end]
+        

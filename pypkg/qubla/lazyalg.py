@@ -2,16 +2,37 @@
 #
 # www.absimp.org/qubla
 #
-# Copyright (c) 2022 Gergely Gálfi
+# Copyright (c) 2022-2023 Gergely Gálfi
 #
 
 import math
 import cmath
 
-def gcd(x, y):
-    while(y != 0):
-        y, x = x % y, y
-    return x
+def gcdEucl(a,b, extend=False):
+    r0=a
+    r1=b
+    if extend:
+        x0=1
+        y0=0
+        x1=0
+        y1=1
+    while True:
+        rnew=r0 % r1
+        if rnew == 0: 
+            if extend:
+                return (r1, x1, y1)
+            else:
+                return r1
+        if extend:
+            q=r0//r1
+            xnew=x0-q*x1
+            ynew=y0-q*y1
+            x0=x1
+            x1=xnew
+            y0=y1
+            y1=ynew
+        r0=r1
+        r1=rnew
 
 class RationalValue:
     def __init__(self, numtype, value):
@@ -25,7 +46,7 @@ class RationalValue:
                         value[0] = value[0] // 10
                         value[1] = value[1] // 10
                 else:
-                    div = gcd(value[0] if value[0] >= 0 else -value[0], value[1])
+                    div = gcdEucl(value[0] if value[0] >= 0 else -value[0], value[1])
                     value[0] = value[0] // div
                     value[1] = value[1] // div
                     

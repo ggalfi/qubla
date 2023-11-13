@@ -2,7 +2,7 @@
 #
 # www.absimp.org/qubla
 #
-# Copyright (c) 2022 Gergely Gálfi
+# Copyright (c) 2022-2023 Gergely Gálfi
 #
 
 from .lazyalg import *
@@ -18,7 +18,6 @@ class UnexpEndError(TokenError):
         i = -1
         while lexer.lookAheadToken(i) != None:
             i += 1
-        print(lexer.lookAheadToken(i-1))
         super().__init__(lexer.lookAheadToken(i-1), 'unexpected end of file')    
     
 def raiseUnexpTokenError(lexer):
@@ -101,6 +100,19 @@ class ExprDict(TreeNode):
             
 def int2word(x, nbits):            
     return [(x>>i) &1 for i in range(nbits)]
+
+class CmdImport(TreeNode):
+    def __init__(self, startpos, endpos, impname):        
+        super().__init__('IMPORT', startpos, endpos)
+        self.impname = impname
+        
+    def __str__(self):
+        return super().__str__() + ' impname: ' + self.impname
+ 
+    def print(self, indent = ''):
+        super().print(indent)
+        print(indent + '|Import name: ' + self.impname)
+            
 
 class CmdFuncDef(TreeNode):
     def __init__(self, startpos, endpos, deftype, nametok, args, body):        
@@ -436,7 +448,8 @@ def parseSimpleExpr(lexer):
                 lenlast = len(lastpiece)
                 if lenlast > 1 and lastpiece[lenlast - 1] in ['i', 'I']:
                     isimg = True
-                    pieces[npieces - 1] = lastpiece[0:(lenlast - 1)]
+                    lenlast -= 1
+                    pieces[npieces - 1] = lastpiece[0:lenlast]
                 else:
                     isimg = False
                 try:
@@ -449,8 +462,9 @@ def parseSimpleExpr(lexer):
                     if npieces == 2:
                         ip2 = ipieces[1]
                         denom = 1
-                        while ip2//denom > 0:
+                        while lenlast > 0:
                             denom *= 10
+                            lenlast -= 1
                         numer = numer * denom + ip2
                         frac = RationalValue('DEC', [numer, denom])
                         if isimg:
@@ -527,7 +541,13 @@ def parseCommand(lexer, returnOnSemicolon = False, depth = 0, inFunc = False):
         localVDef = False
         startpos = tok.startpos
         if tok.type=='NAME':
-            if tok.value == 'function':
+            if tok.value == 'import':
+                lexer.nextToken()
+                nametok = nextTokenAssert(lexer, toktype='NAME')
+                closesc = nextTokenAssert(lexer, ';')
+                return CmdImport(startpos, closesc.endpos, nametok.value)
+                
+            elif tok.value == 'function':
                 tok2 = lexer.lookAheadToken(1)
                 if tok2 != None and tok2.type == 'NAME':
                     if depth > 0:
