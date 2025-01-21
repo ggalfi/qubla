@@ -1930,7 +1930,7 @@ class QuantumLogic:
         maxnstqbin = 0
         maxnstqbout = 0
         nstqb = 0
-        cplxworst = 0
+        cplxdt = 0
         cplxbest = 0
         for step in self.arrstep:
             if step != None:
@@ -1941,7 +1941,7 @@ class QuantumLogic:
                     nstqbout = step.nout + sum(step.arrcopy)
                     maxnstqbin = step.nin if step.nin > maxnstqbin else maxnstqbin
                     maxnstqbout = nstqbout if nstqbout > maxnstqbout else maxnstqbout
-                    cplxworst += ((1<<step.nin) - 1) * step.nout
+                    cplxdt += ((1<<step.nin) - 1) * step.nout
                     cplxcnot = math.log((step.nqb) * (step.nqb - 1)) if step.nqb > 1 else 0
                     cplxdf = (1<<step.nin) * nstqbout
                     cplxln2df = math.log((1<<cplxdf) + 1) if cplxdf <= 20 else cplxdf*math.log(2)
@@ -1965,7 +1965,7 @@ class QuantumLogic:
             'maxCntStepQubits': nstqb,
             'maxCntStepInQubits': maxnstqbin,
             'maxCntStepOutQubits': maxnstqbout,
-            'cplxWorst': cplxworst,
+            'cplxDT': cplxdt,
             'cplxBest' : cplxbest,
         }
             
